@@ -1,504 +1,498 @@
-================================================================================
-IEEE CONFERENCE PAPER
-================================================================================
+==============================================================================
+IEEE CONFERENCE PAPER - plain-text version (formatted paper: PDF and DOCX)
+==============================================================================
 
-AI-Powered Technical Interview and Skill Assessment Platform
-Using Large Language Models: Design, Implementation, and Evaluation
+AI-Powered Technical Interview and Skill Assessment Platform Using Large
+Language Models: Design, Implementation, and Evaluation
 
-Dhruv Parmar, Pratiksinh Chauhan, Dhwij Patel
-Department of Computer Engineering
-Silver Oak University
-Ahmedabad, Gujarat, India
-parmardhruv747@gmail.com, pratiksinh4645@gmail.com, pateldhwij217@gmail.com
-Project ID: CSE_M2_35, Project Guide: Dr. Monali Suthar, B.Tech CSE
+Dhruv Parmar
+  Department of Computer Engineering
+  Silver Oak University
+  Ahmedabad, India
+  parmardhruv747@gmail.com
+Pratiksinh Chauhan
+  Department of Computer Engineering
+  Silver Oak University
+  Ahmedabad, India
+  pratiksinh4645@gmail.com
+Dhwij Patel
+  Department of Computer Engineering
+  Silver Oak University
+  Ahmedabad, India
+  pateldhwij217@gmail.com
+Dr. Monali Suthar
+  Department of Computer Engineering
+  Silver Oak University
+  Ahmedabad, India
 
-Abstract— The traditional technical interview process in software
-engineering recruitment is plagued by inter-rater inconsistency,
-implicit demographic bias, prohibitive cost, and limited
-scalability. This paper presents the design, implementation, and
-empirical evaluation of an AI-Powered Technical Interview and
-Skill Assessment Platform that leverages Google's Gemini large
-language model (LLM) to automate the full interview lifecycle —
-from dynamic question generation and multi-turn conversational
-follow-up probing to multi-criteria code evaluation with Big-O
-complexity analysis and five-axis competency visualization. The
-platform is engineered as a full-stack web application using React 18,
-TypeScript, Node.js, and Express, with a dual-mode persistence
-layer supporting both PostgreSQL via Prisma ORM and an
-in-memory store for zero-configuration development. A
-deterministic conversational state machine governs interview
-progression, preventing question skipping and infinite loops.
-Structured JSON outputs from the LLM are validated at runtime
-using Zod schemas with an automated retry-with-correction
-mechanism, reducing parsing failures from 8.2% to 0.3%.
-Evaluation across 50 controlled interview sessions demonstrates
-that the platform achieves an overall score correlation of
-r = 0.84 (p < 0.001) with expert human evaluators, while
-reducing assessment time by 82% and lowering reported
-candidate anxiety by 74%. These findings confirm the efficacy
-of LLM-driven agents as standardized, scalable, and equitable
-technical assessment instruments in contemporary hiring pipelines.
+Abstract—Technical interviews are central to software engineering recruitment,
+yet students preparing for placements have limited access to realistic,
+structured practice with immediate feedback. This paper presents the design
+and implementation of an AI-powered technical interview and skill assessment
+platform in which a large language model (LLM), Google Gemini, acts as the
+interviewer while the application retains control of the interview structure.
+Candidates configure a session by role, experience level, difficulty,
+technologies and topics; the backend generates one question at a time,
+evaluates each answer against a four-criterion rubric, and allows at most one
+adaptive follow-up per question through a deterministic state machine. Coding
+answers written in an embedded Monaco editor are reviewed by the model for
+correctness, algorithm, code quality and Big-O complexity. Every model output
+is requested as JSON and validated with Zod schemas, and a browser-based
+proctoring module enforces fullscreen mode, detects tab switches and blocks
+clipboard and developer shortcuts. The system is implemented with React,
+TypeScript, Node.js and Express. In a functional evaluation with the live
+model, 22 of 25 test cases passed, and a case-study session produced
+role-specific questions, code-specific feedback and a final report that
+accounted for an unanswered question. We also report the limitations observed,
+including dependence on the availability and quota of the LLM service, and
+outline a user study to measure agreement with human interviewers.
 
-Keywords— AI interview platform, large language model,
-Gemini API, technical assessment, automated code evaluation,
-Big-O complexity analysis, conversational state machine,
-multi-dimensional skill analytics, prompt engineering, Zod
-schema validation, React, Node.js, TypeScript
+Index Terms—Large language models, technical interviews, automated assessment,
+code evaluation, prompt engineering, online proctoring.
+
 
 I. INTRODUCTION
 
-Technical interviewing remains the most resource-intensive
-and least standardized component of the software engineering
-recruitment pipeline [1]. Industry reports indicate that senior
-software engineers allocate 15–25% of their working hours to
-conducting technical phone screens and on-site assessments,
-incurring substantial opportunity costs for engineering
-organizations [2]. Despite this extensive investment,
-unstructured and semi-structured technical interviews suffer from
-severe structural deficiencies, notably low inter-rater
-reliability (ICC as low as 0.40 between independent evaluators)
-and susceptibility to unconscious demographic biases related to
-gender, accent, and educational background [3], [4].
+    Technical interviews remain a decisive step in software engineering hiring
+and in campus placement drives. Decades of selection research show that
+structured interviews, in which every candidate receives comparable questions
+scored against explicit criteria, predict job performance better than
+unstructured conversations [1], [2]. For students, however, structured
+practice is scarce: mock interviews with experienced engineers are costly and
+difficult to schedule, coding websites judge only whether submitted code
+passes test cases, and general-purpose chatbots neither follow an interview
+structure nor return consistent scores.
 
-Furthermore, live technical interviews frequently trigger high
-levels of candidate evaluative anxiety, which has been shown to
-impair working memory and depress performance by up to 28% among
-underrepresented groups [5]. Standardizing the assessment medium
-and providing psychologically safe, asynchronous evaluation
-environments has thus emerged as a pressing imperative in
-human-computer interaction and recruitment systems research.
+    Instruction-tuned LLMs such as GPT-4, PaLM and Gemini can now generate
+domain-specific questions, reason about code and hold multi-turn conversations
+[3]–[5]. Studies of LLMs as evaluators report agreement with human preferences
+comparable to agreement between humans [6]. At the same time, LLM outputs can
+be fluent but unsupported, inconsistent between runs, or malformed [7], so an
+assessment tool cannot simply forward model output to the user.
 
-Recent breakthroughs in instruction-tuned Large Language Models
-(LLMs)—including Google's Gemini, OpenAI's GPT-4, and Code
-Llama—have demonstrated competitive capabilities across code
-comprehension, semantic reasoning, and conversational dialogue
-[6], [7], [12]. These developments unlock the potential to construct
-automated interview agents that deliver consistent,
-criterion-referenced evaluations without human fatigue or bias.
+    This paper describes a platform that combines these capabilities with an
+application-controlled interview workflow. Its contributions are:
 
-To systematically evaluate this paradigm, our research investigates
-three core research questions:
-(RQ1) Can an instruction-tuned LLM replicate the scoring fidelity of
-expert human evaluators across diverse competency axes?
-(RQ2) Can a deterministic state machine enforce liveness and
-structural bounds on multi-turn generative dialogues?
-(RQ3) Can static semantic prompt analysis accurately deduce
-asymptotic Big-O runtime and memory complexity without code
-execution?
+  (1) an interview workflow in which the application, not the model, owns
+      progression: questions are generated lazily with topic rotation, and
+      follow-ups are bounded by an explicit state machine;
+  (2) a schema-validated prompting layer behind a provider-independent
+      interface, which turns every model call into typed data and allows a
+      mock provider for development;
+  (3) joint assessment of conceptual and coding answers in one session, with
+      model-based complexity analysis, a holistic final report and a
+      deterministic fallback;
+  (4) a browser-based proctoring module; and
+  (5) a functional evaluation with the live model, together with an account of
+      the limitations and defects it revealed.
 
-This paper presents the AI-Powered Technical Interview and Skill
-Assessment Platform, an enterprise-grade full-stack system that
-automates technical candidate evaluation. Key contributions include:
-(1) a deterministic two-variable conversational state machine
-governing multi-turn interview progression; (2) a runtime Zod
-schema validation pipeline with self-correction retries achieving
-99.7% output reliability; (3) a static code evaluation engine with
-algorithmic Big-O analysis; (4) an anti-cheating screen-locking
-subsystem; (5) a dual-mode persistence architecture; and (6) empirical
-validation across N = 50 candidate sessions demonstrating r = 0.84
-concordance with senior human interviewers.
+    Section II reviews related work, Section III presents the design, Section
+IV the evaluation, Section V the limitations and future work, and Section VI
+concludes.
+
 
 II. RELATED WORK
 
-A. Automated Interview Systems
-Early interview automation concentrated on automated video interview
-(AVI) analysis extracting non-verbal and prosodic features [3], [5].
-However, Hickman et al. [3] documented critical algorithmic fairness
-concerns when black-box models are trained on historical hiring data.
-Conversely, Sackett et al. [8] showed that structured interviews with
-explicit rubrics consistently outperform unstructured interviews in
-predictive validity. Our work applies structured psychometric rubrics
-directly through transparent LLM prompt engineering, avoiding black-box
-video classifiers.
+A. Automated Interview Assessment
 
-B. LLMs in Code Analysis & Complexity Estimation
-Foundation models fine-tuned on source code—such as Codex [9],
-AlphaCode [10], and StarCoder [11]—have proven adept at code generation
-and repair. Ahmad et al. [14] surveyed LLMs in static program analysis,
-noting 84% accuracy in algorithmic complexity classification. We
-build upon these insights to evaluate candidate submissions for
-functional correctness, Big-O time and space complexity, and
-architectural best practices without executing untrusted candidate code
-in sandboxes.
+    MACH used a virtual agent that analysed facial expressions, speech and
+prosody to coach users in mock job interviews, and participants who practised
+with it improved in subsequent interviews rated by career counsellors [8].
+Naim et al. predicted human ratings of recorded mock interviews from lexical,
+prosodic and facial features [9], and HireNet applied hierarchical attention
+to asynchronous video interviews [10]. Hickman et al. examined automated video
+interview personality assessments and reported mixed evidence of reliability
+and validity, including limited generalizability to new samples [11]. Raghavan
+et al. found that vendors of algorithmic pre-employment assessments disclosed
+little about validation and bias mitigation [12]. These systems target
+behavioural cues in hiring decisions; our platform targets technical content
+in a practice setting and states its scoring criteria explicitly in the
+prompts.
 
-Recent benchmarks such as HumanEval+ and SWE-bench have further
-demonstrated that modern frontier LLMs possess strong program
-semantics comprehension, enabling nuanced line-by-line feedback on
-corner cases, off-by-one errors, and memory allocation efficiency [16].
-Leveraging these capabilities within structured scoring prompts allows
-automated assessment to approach human-grade code review.
+B. LLMs for Code Understanding
 
-C. Structured Output Reliability & Competency Analytics
-While LLMs generate rich text, production integration requires
-guaranteed schema adherence. Peng et al. [15] and Rebuffi et al. [17]
-highlighted structural hallucination risks in raw LLM outputs. We
-address this via Zod schema enforcement and error-reflection retries.
-For visualization, Cascio and Aguinis [18] and Klerkx et al. [19]
-demonstrated the superiority of multi-axial radar and bar charts for
-formative and summative competency feedback, which we adopt in our
-analytics suite.
+    Codex solved 28.8% of the 164 HumanEval problems with a single sample
+[13], and later models such as AlphaCode, StarCoder and Code Llama improved
+code generation further [14]–[16]; pre-training on code and comments also
+improves code representation [17]. We use a general-purpose model to review
+submitted code and estimate its complexity without executing it; the accuracy
+of such estimates is not assumed and is part of the planned evaluation.
 
-D. Prompt Engineering Paradigms in Assessment
-Standard prompt architectures frequently produce generic or overly
-lenient evaluations. Wei et al. [23] showed that Chain-of-Thought (CoT)
-prompting elicits multi-step logical reasoning in LLMs, while Ouyang
-et al. [22] demonstrated that instruction fine-tuning aligns model
-evaluations with human preferences. In our design, we incorporate
-few-shot rubric grounding and zero-shot reasoning directives to guide
-the LLM through a step-by-step assessment of candidate answers before
-producing final numerical scores, significantly mitigating scoring
-variance.
+C. Reliability of LLM Evaluators
 
-III. SYSTEM ARCHITECTURE AND METHODOLOGY
+    Instruction tuning with human feedback makes models follow task
+instructions and personas [18], and asking for intermediate reasoning improves
+complex reasoning [19]. LLM judges, however, show position, verbosity and
+self-enhancement biases [6], and generated text can contain unsupported
+content [7]. Guardrail toolkits [20] and automated feedback loops [21] have
+been proposed to constrain outputs. Our platform constrains the form of the
+output with schemas; constraining its correctness remains future work.
 
-A. High-Level Architectural Schematic
-The platform adopts a decoupled three-tier architecture comprising a
-React 18 Single-Page Application (SPA), a Node.js/Express application
-service, and an abstraction-backed persistence layer. Communication
-occurs over secure REST endpoints with JWT bearer authorization.
-Fig. 1 illustrates the end-to-end component topology and runtime data
-flow.
+D. LLMs in Education
 
-+-----------------------------------------------------------------------+
-|                       SYSTEM ARCHITECTURE                             |
-|                                                                       |
-|  +-----------------------------------------------------------------+  |
-|  |                 PRESENTATION TIER (CLIENT)                      |  |
-|  |  React 18 SPA | Monaco Code Editor | Web Speech | Recharts Radar|  |
-|  +-----------------------------------------------------------------+  |
-|                                  |                                    |
-|                                  v                                    |
-|  +-----------------------------------------------------------------+  |
-|  |             APPLICATION & SECURITY TIER (EXPRESS)               |  |
-|  |  REST API Routes | JWT Auth (ASVS Level 1) | Zod Schema Filter  |  |
-|  +-----------------------------------------------------------------+  |
-|                                  |                                    |
-|                                  v                                    |
-|  +-----------------------------------------------------------------+  |
-|  |              ORCHESTRATION & STATE MACHINE TIER                 |  |
-|  |  Deterministic CSM (Q, A) | Static Big-O Complexity Engine      |  |
-|  +-----------------------------------------------------------------+  |
-|                                  |                                    |
-|                 +----------------+----------------+                   |
-|                 v                                 v                   |
-|  +-----------------------------+   +-------------------------------+  |
-|  |      AI MODEL ENGINE        |   |     DUAL-MODE PERSISTENCE     |  |
-|  |  Google Gemini 1.5 Flash    |   |  PostgreSQL 15 (Prisma ORM)   |  |
-|  |  Prompt Pipeline & Retry    |   |  InMemoryDb Development Store |  |
-|  +-----------------------------+   +-------------------------------+  |
-+-----------------------------------------------------------------------+
-      Fig. 1. End-to-end multi-tier system architecture schematic.
+    Kasneci et al. discuss the opportunities of LLMs for personalised learning
+and feedback together with risks of bias and over-reliance [22], and a
+systematic review of automatic question generation found that most earlier
+systems were template-based and difficult to evaluate [23]. Our platform
+applies LLM question generation and feedback to interview practice.
 
-B. Deterministic Conversational State Machine
-Uncontrolled LLM dialogues often experience conversational drift or
-question repetition. We model the interview lifecycle as a
-deterministic finite state machine defined by state tuple (Q, A),
-where Q represents the active question index and A denotes the answer
-counter (0 for primary question, 1 for follow-up). State transition
-delta is governed by:
 
-• delta(Q, 0): Collect candidate answer. If the evaluation indicates
-  that probing is warranted (shouldAskFollowUp = true), generate
-  follow-up question, persist in session context, and transition to
-  (Q, 1). Otherwise, advance to (Q+1, 0).
+III. SYSTEM DESIGN
 
-• delta(Q, 1): Evaluate candidate's follow-up answer, consolidate
-  multi-turn score, and deterministically increment to (Q+1, 0).
+A. Architecture
 
-This formulation guarantees liveness, eliminates question skipping,
-bounds follow-up probes to at most one per topic, and guarantees
-session termination when Q reaches the configured question limit N.
+    The platform is a three-tier web application (Fig. 1, Table I). The React
+single-page application provides the setup form, the interview workspace with
+chat, code and voice modes, the results view, history and a practice sandbox.
+It calls an Express REST API with a JSON Web Token. Each request passes
+through Helmet security headers, CORS restricted to the frontend origin, a 10
+MB body limit, a rate limiter of 100 requests per 15 minutes per client, token
+authentication and Zod validation of request bodies. Services contain the
+business logic and depend on two abstractions: an AIService interface with six
+operations (question generation, follow-up generation, answer evaluation,
+coding evaluation, result generation and practice generation), implemented by
+a Gemini provider and a mock provider, and a data facade that uses Prisma with
+PostgreSQL when a database URL is configured and an in-memory store otherwise.
+The Gemini API key is read only on the server.
 
-C. LLM Prompt Pipeline & Zod Schema Validation
-Prompts are structured as strict system instructions followed by typed
-context variables (role, stack, difficulty, and accumulated Q&A
-history). The LLM is instructed to emit raw JSON conforming to defined
-schemas. All model responses pass through a three-stage safety pipeline:
-(1) markdown fence stripping and substring JSON extraction; (2) Zod
-schema parse validating field types and ranges; and (3) an automated
-error-reflection retry loop injecting validation failure messages back
-into the model prompt. Across our testing, 91.8% of responses were valid
-on the first attempt, and 99.7% succeeded within two retries.
+    Fig. 1. System architecture. Services own the interview state; the LLM is
+    reached only through the AI service layer, and every response is parsed
+    and validated before use.
+    [Figure: see the PDF or DOCX version]
 
-The evaluation schema strictly enforces numerical ranges (0–100) across
-all five dimensions, non-empty feedback strings, typed string arrays for
-identified strengths and improvement recommendations, and an explicit
-boolean shouldAskFollowUp flag. If a field fails type coercion (e.g.,
-scores returned as strings or missing boolean flags), the Zod error
-formatter packages the path and issue into a concise correction prompt,
-ensuring schema compliance prior to application state mutation.
+                                   TABLE I                                    
+                             IMPLEMENTATION STACK                             
++-------------------+---------------------------------------------------+
+| Layer             | Technology                                        |
++-------------------+---------------------------------------------------+
+| Frontend          | React 19, TypeScript, Vite, Tailwind CSS, Zustand |
+| Editor and charts | Monaco Editor (6 languages), Recharts             |
+| Browser APIs      | Web Speech, Fullscreen, Page Visibility           |
+| Backend           | Node.js, Express 4, TypeScript (ES modules)       |
+| LLM               | Google Gemini API, model gemini-3.5-flash         |
+| Validation        | Zod schemas for requests and model output         |
+| Security          | bcrypt, JWT, Helmet, CORS, rate limiting          |
+| Persistence       | Prisma ORM with PostgreSQL; in-memory store       |
++-------------------+---------------------------------------------------+
 
-D. Multi-Criteria Code Evaluation & Big-O Analysis
-For programming assessments, the platform integrates a specialized static
-evaluation prompt that analyzes candidate source code without requiring
-execution in remote sandbox containers. The evaluation model inspects
-algorithmic structures, recursion boundaries, and data structure
-selections to deduce asymptotic time complexity (e.g., O(1), O(log n),
-O(n), O(n log n), O(n^2)) and auxiliary space complexity. Candidate
-implementations are rigorously scored across modular decomposition,
-boundary condition handling, variable naming conventions, and idiomatic
-language constructs, delivering detailed optimization feedback directly
-in the results view.
+B. Interview Workflow and State Machine
 
-E. Dual-Mode Persistence Architecture
-A unified repository interface abstracts persistence: Production mode
-leverages PostgreSQL via Prisma ORM with relational integrity and index
-optimizations; Development mode provides an in-memory Map-based database
-that mirrors Prisma Client methods, reducing local setup time by 74%.
-Model switching is environment-driven: if DATABASE_URL is defined,
-PrismaClient is instantiated; otherwise, InMemoryDb is activated,
-ensuring seamless developer onboarding without local database setup.
+    A candidate chooses one of ten roles, five experience levels, four
+difficulty levels, seven interview types, technologies, optional topics, a
+duration and 5, 10, 15 or 20 questions (N). The session is stored as pending.
+When it starts, the service marks it active and generates only the current
+question, choosing its topic by rotation over the topic list T:
 
-F. Automated Screen Locking & Anti-Cheating Proctoring
-To ensure assessment integrity in remote unproctored environments, the
-platform incorporates an automated screen-locking and proctoring
-subsystem implemented via a custom React hook (useScreenLock) and an
-integrated overlay component. Upon session initiation, the interface
-requests standard Fullscreen Mode via the HTML5 Fullscreen API,
-simultaneously capturing and neutralizing context-menu (right-click)
-events, clipboard copy/cut operations, and developer tool keyboard
-shortcuts (F12, Ctrl/Cmd+Shift+I). Browser history navigation is trapped
-using popstate manipulation to prevent accidental tab closures.
+                       topic(q) = T[ q mod |T| ]                           (1)
 
-An active listener binds to the document visibilitychange API. When a
-candidate navigates away from the interview tab or minimizes the browser,
-the system increments a persistent violation counter, displays an
-immediate high-priority warning modal, and logs the event timestamp.
-Reaching the maximum violation threshold (3 tab switches) triggers
-automated session completion and scoring. Crucially, upon session
-completion—whether triggered manually or by timer expiry—the subsystem
-automatically executes document.exitFullscreen(), disengages all event
-listeners, and restores the candidate's browser screen to normal state.
+where q is the zero-based question index. Each later question is generated
+when the session reaches it, so model calls match the questions actually
+asked.
 
-G. Competency Radar Analytics & Visual Mapping
-Post-interview analytics aggregate multi-turn scores across five
-standardized competency vectors: Technical Depth, Problem Solving, Code
-Quality, Best Practices, and Communication Clarity. Each vector is
-normalized to a 0–100 scale using arithmetic mean aggregation across all
-evaluated questions and follow-ups. The client renders an interactive
-SVG radar polygon using Recharts, allowing candidates and evaluators to
-quickly diagnose balance between conceptual knowledge, implementation
-rigor, and expressive clarity.
+    Progression is modelled by the state (q, k), where k ∈ {0, 1} is the
+number of answers already stored for question q (Fig. 2). After an answer is
+evaluated, let E be the evaluator's follow-up flag. A follow-up is asked only
+if
 
-TABLE I. ARCHITECTURAL COMPONENT SPECIFICATIONS & TECH STACK
-+-------------------+-----------------------------+----------------------------------------------+
-| Component Layer   | Primary Technology          | Key Functionality / Architectural Role       |
-+-------------------+-----------------------------+----------------------------------------------+
-| Frontend Client   | React 18, TypeScript, Vite  | Interactive candidate UI & Monaco editor     |
-| Visualization     | Recharts (Radar & Bar)      | Five-axis competency & historical trends     |
-| Proctoring Module | HTML5 Fullscreen & State    | Screen lock, tab-switch logging & devtools   |
-| API Gateway       | Express.js, Node.js         | RESTful routing, JWT auth, ASVS controls     |
-| LLM Engine        | Google Gemini 1.5 Flash     | Adaptive questioning & Big-O static analysis |
-| Schema Validator  | Zod v3, Error Reflection    | Runtime typing & automated retry correction  |
-| Production DB     | PostgreSQL 15, Prisma ORM   | Relational ACID storage with cascading logic |
-| Dev Fallback DB   | TypeScript InMemory Map     | Zero-config local development & test suite   |
-+-------------------+-----------------------------+----------------------------------------------+
+                     F = E ∧ (k = 0) ∧ (q < N − 1)                         (2)
 
-IV. EXPERIMENTAL RESULTS AND EVALUATION
+If F holds, the model is asked for a follow-up question, which it may decline
+(a default question about trade-offs is used if the call fails); the follow-up
+is stored with the answer and the state becomes (q, 1). Otherwise the state
+becomes (q + 1, 0), and the session completes when q + 1 = N. Hence every
+question receives at most one follow-up, the last question receives none, and
+a session ends after at most 2N − 1 answer submissions. The candidate can also
+complete the session early, and it is completed automatically when the timer
+expires or on the third tab-switch violation.
 
-A. Evaluation Methodology
-To assess real-world efficacy, we conducted a controlled study involving
-N = 50 engineering candidates across undergraduate and graduate levels.
-Each candidate completed two randomized, counterbalanced 45-minute
-technical interviews: Condition H (two senior faculty software
-engineering evaluators using a standardized scoring rubric) and Condition
-A (our AI platform using identical rubric criteria). Assessment scores
-across all five dimensions were recorded on a 0–100 scale.
+    Fig. 2. Interview state machine. q is the question index, N the number of
+    questions and F the follow-up condition of (2).
+    [Figure: see the PDF or DOCX version]
 
-B. Assessment Reliability & Human Correlation
-The platform demonstrated substantial concordance with human evaluators.
-Overall composite scores exhibited a Pearson correlation of r = 0.84
-(p < 0.001) and an intraclass correlation coefficient (ICC) of 0.88,
-compared to 0.71 inter-rater agreement between human evaluator pairs.
-Table II presents the granular per-dimension correlation and Mean
-Absolute Difference (MAD) metrics.
+C. Prompt Design and Output Validation
 
-TABLE II. ASSESSMENT CONCORDANCE BETWEEN AI AND HUMAN EVALUATORS (N = 50)
-+-----------------------+------------+---------+-----------+-----------+---------+
-| Competency Dimension  | Human Mean | AI Mean | Pearson r | MAD (pts) | p-value |
-+-----------------------+------------+---------+-----------+-----------+---------+
-| Technical Depth       |    74.2    |  75.1   |   0.86    |    5.2    | < 0.001 |
-| Code Quality & Big-O  |    68.5    |  69.8   |   0.82    |    6.1    | < 0.001 |
-| Problem Solving       |    71.0    |  72.3   |   0.80    |    6.8    | < 0.001 |
-| Best Practices        |    66.4    |  67.9   |   0.78    |    7.4    | < 0.001 |
-| Communication Clarity |    78.1    |  72.4   |   0.73    |    8.9    | < 0.001 |
-| Overall Composite     |    71.6    |  71.5   |   0.84    |    4.8    | < 0.001 |
-+-----------------------+------------+---------+-----------+-----------+---------+
+    Every model call uses a fixed system instruction that defines the
+interviewer persona: a senior, professional interviewer who does not help the
+candidate or reveal answers, asks concise questions, tests understanding
+rather than memorisation, asks for examples and trade-offs, keeps a neutral
+tone and evaluates only job-relevant skills. Each task prompt lists the exact
+JSON fields required, and the helper appends an instruction to return JSON
+only. The response is stripped of Markdown code fences, parsed, and validated
+with a Zod schema. Schemas for questions, answer evaluations and follow-ups
+supply defaults for missing optional fields, while the coding-evaluation and
+result schemas require every field. A response that is not valid JSON or fails
+a required field raises an error; the current implementation does not retry
+the call. Table II lists the fields returned for each answer type.
 
-Technical Depth and Code Quality showed the highest correlation (r = 0.86
-and 0.82), confirming the model's competence in evaluating factual
-accuracy and algorithmic complexity. The largest variance occurred in
-Communication (r = 0.73), where human evaluators credited verbal
-inflection and interpersonal poise, whereas the text-based AI scored
-grammatical clarity and terminology precision.
+                                   TABLE II                                   
+                   EVALUATION FIELDS RETURNED BY THE MODEL                    
++-----------------+---------------------------------+-----------------------------------+
+| Aspect          | Conceptual answer               | Coding answer                     |
++-----------------+---------------------------------+-----------------------------------+
+| Overall (0–100) | score                           | score                             |
+| Correctness     | technicalAccuracy               | correctness                       |
+| Depth / quality | depth                           | codeQuality                       |
+| Reasoning       | problemSolving                  | algorithm                         |
+| Communication   | communication                   | fixed at 80                       |
+| Complexity      | —                               | time, space (Big-O)               |
+| Narrative       | feedback, strengths, weaknesses | feedback, strengths, improvements |
+| Follow-up flag  | shouldAskFollowUp               | not used                          |
++-----------------+---------------------------------+-----------------------------------+
 
-C. Operational Efficiency & Runtime Validation
-Operational resource expenditure was drastically reduced under the
-automated system. Human evaluation required an average of 58.0 minutes
-per candidate (45-minute interview plus 13 minutes of scoring
-deliberation). The AI platform generated comprehensive multi-dimensional
-scorecards and qualitative feedback within 4.2 seconds post-interview—an
-82% operational time reduction. Table III summarizes key operational and
-schema reliability benchmarks over 1,000 live API transactions.
+D. Coding Evaluation
 
-TABLE III. OPERATIONAL BENCHMARKS & RUNTIME VALIDATION RELIABILITY
-+----------------------------------+-------------+-------------+-----------------------+
-| Evaluation Metric                | Human Panel | AI Platform | Performance Delta     |
-+----------------------------------+-------------+-------------+-----------------------+
-| Evaluation Deliberation Time     |  13.0 min   |   4.2 sec   | 99.4% faster scoring  |
-| Total Evaluator Time / Session   |  58.0 min   | 0.0 min(au) | 82.0% resource saving |
-| Inter-Rater Reliability (ICC)    |    0.71     |    0.88     | +23.9% consistency    |
-| First-Attempt Schema Validity    |     N/A     |    91.8%    | Zod strict format     |
-| Cumulative Validity (2 Retries)  |     N/A     |    99.7%    | 0.3% fallback rate    |
-| Candidate Self-Reported Anxiety  |  7.8 / 10   |  2.1 / 10   | 73.1% anxiety drop    |
-+----------------------------------+-------------+-------------+-----------------------+
+    Coding questions open in a Monaco editor with starter code from the model
+and support JavaScript, TypeScript, Python, Java, C++ and Go. Code execution
+is behind a provider interface whose current implementation returns simulated
+output, so submissions are assessed by the model alone, which reports
+correctness, algorithm and code quality ratings and Big-O time and space
+complexity. The ratings are mapped to the conceptual fields (correctness to
+accuracy, code quality to depth, algorithm to problem solving) so that both
+answer types can be aggregated.
 
-D. Candidate Experience & Anxiety Reduction
-Post-session surveys revealed that 74% of participants reported
-significantly lower anxiety with the AI interviewer compared to the human
-panel. 68% rated the instant, multi-dimensional feedback and Big-O
-breakdown as more constructive than conventional interviewer notes, and
-62% felt the evaluation was more objective and devoid of pedigree bias.
-28% noted that human interviewers were slightly better at understanding
-non-standard verbal analogies, indicating an opportunity for multimodal
-model enhancements.
+E. Result Generation
 
-E. Follow-Up Probing Quality & Algorithmic Complexity Accuracy
-Qualitative evaluation of 50 LLM-generated follow-up questions by three
-independent senior software engineers yielded a Cohen's kappa of 0.74
-(substantial agreement), with 82% of probes rated as 'highly relevant'.
-Dominant probe patterns targeted algorithmic edge cases (e.g., null
-pointers, integer overflow), concurrency bottlenecks, and scaling
-trade-offs. On a benchmark set of 60 code submissions with ground-truth
-Big-O complexity, Gemini achieved 89.4% accuracy on Time Complexity and
-92.1% on Space Complexity classification.
+    On completion, the service sends the full history of questions, answers,
+scores and feedback to the model and requests an overall score, five skill
+scores (technical knowledge, problem solving, coding, communication and
+accuracy), strengths, weaknesses, recommendations and a summary. The result is
+stored once and reused. If the call fails, scores are computed from the n
+stored answers, for example
 
-F. Practice Sandbox Efficacy & Proctoring Audit
-A 30-day sandbox pilot with 48 users demonstrated an average 21.9% score
-improvement (p < 0.01) between first and third attempts. Candidates
-completing 10 or more practice questions scored 7.3 points higher in
-formal interviews (t(46) = 3.1, p < 0.01). The screen locking subsystem
-successfully intercepted 14 window blur events during testing,
-maintaining proctoring integrity across all sessions.
+           S = round( (1/n) Σi si ), C = round( (1/n) Σi ci )              (3)
 
-G. Latency Profiling & Economic Cost Analysis
-Profiling of 1,000 live candidate transactions revealed a mean end-to-end
-evaluation latency of 1.84 ± 0.31 seconds per question turn. Token
-consumption averaged 840 input tokens and 320 output tokens per
-evaluation. At current Gemini 1.5 Flash commercial pricing, the marginal
-computation cost per comprehensive 10-question technical interview is
-approximately $0.0038 USD. Compared to the estimated $85.00 USD in
-engineering hourly compensation required for an equivalent 58-minute
-human interview panel, the automated platform delivers a greater than
-99.9% reduction in direct assessment cost, making high-quality mock
-assessments accessible at massive scale.
+where S is the overall score, C the coding score, si the score of answer i,
+and ci equals si for code answers and the technical accuracy otherwise; the
+remaining skills average their corresponding fields, and all scores default to
+60 when no answer exists.
 
-H. Bias Mitigation & Standardized Scoring Equity
-To assess demographic fairness, candidate performance distributions were
-analyzed across self-reported gender and educational pedigree tiers. Under
-human evaluation, candidates from non-flagship institutions received lower
-average Communication scores (mean 71.2) than flagship institution
-candidates (mean 82.4, t(48) = 2.8, p < 0.01) despite exhibiting
-statistically indistinguishable Code Quality. Under the AI platform, the
-disparity in Communication scores narrowed significantly (mean 72.0 vs.
-73.1, p = 0.44), confirming that rubric-grounded text prompting mitigates
-pedigree halo effects and accent-related rater biases.
+F. Proctoring
+
+    Before the interview starts, the candidate accepts the proctoring rules. A
+React hook then requests fullscreen mode and requests it again if the
+candidate leaves; listens for page-visibility changes and shows a warning
+overlay for each tab switch, completing the interview on the third; cancels
+copy, cut and context-menu events and the shortcuts Ctrl/Cmd+C, V, X, P, S, U
+and I, F12 and Ctrl/Cmd+Shift+I, J and C; neutralises the Back button; and
+asks for confirmation before the page is closed. All rules are removed when
+the session ends.
+
+G. Security, Persistence and Practice
+
+    Passwords are hashed with bcrypt using 10 salt rounds [24], and tokens are
+signed JWTs valid for seven days [25], sent as an HTTP-only cookie or a Bearer
+header. The Prisma schema defines seven tables (users, interviews, questions,
+answers, results, skill scores and practice questions) with cascading deletes.
+The practice sandbox generates three questions with hints and a model solution
+for a chosen category and difficulty and evaluates answers with the interview
+rubric.
+
+
+IV. EVALUATION
+
+A. Setup
+
+    The platform was tested in October 2026 with the live Gemini model
+(gemini-3.5-flash), the in-memory store, the Vite development server and
+Node.js. REST endpoints were tested with direct HTTP requests, user flows with
+a scripted Chrome browser, and proctoring with keyboard, clipboard and
+context-menu events and real tab switches in the locked workspace. The aim was
+to verify functional behaviour; agreement with human raters was not measured.
+
+B. Functional Testing
+
+    Twenty-five test cases were executed (Table III). All nine authentication
+and validation cases behaved correctly, although duplicate registration and
+wrong-password login returned HTTP 500 instead of 409 and 401. Topic rotation
+followed (1): the first three questions covered JavaScript, React and
+Databases as configured. All six blocked actions were cancelled while ordinary
+typing was not, the overlay reported “Warning 1 of 3”, and the third switch
+completed the session. The follow-up path for conceptual answers could not be
+exercised because the daily request quota of the API key was exhausted.
+
+                                  TABLE III                                   
+                           FUNCTIONAL TEST RESULTS                            
++--------------------------------------+-------+------+------+---------+
+| Category                             | Cases | Pass | Fail | Not run |
++--------------------------------------+-------+------+------+---------+
+| Authentication and validation        | 9     | 9*   | 0    | 0       |
+| Interview workflow and AI evaluation | 9     | 8    | 0    | 1       |
+| Code execution (simulated)           | 1     | 1    | 0    | 0       |
+| Proctoring                           | 3     | 3    | 0    | 0       |
+| Security headers and rate limit      | 1     | 1    | 0    | 0       |
+| Error handling and analytics         | 2     | 0    | 2    | 0       |
+| Total                                | 25    | 22   | 2    | 1       |
++--------------------------------------+-------+------+------+---------+
+* Two cases rejected the input correctly but returned HTTP 500 instead of 409
+or 401.
+
+    The two failures were (i) temporary model errors (HTTP 503) and quota
+errors (HTTP 429), which surfaced as a generic message with no retry, and (ii)
+dashboard statistics, which showed 0/100 for completed sessions because the
+average is read from a field that result generation does not update.
+
+C. Case Study
+
+    A five-question session was configured for a junior Full Stack Developer
+at medium difficulty with the topics JavaScript, React, Databases, APIs and
+Algorithms. Table IV shows the evaluations returned for the questions reached
+before the session was completed early.
+
+                                   TABLE IV                                   
+                  MODEL EVALUATION IN THE CASE-STUDY SESSION                  
++---+-----------------------+--------------+------+-------+------+---------------+
+| Q | Topic, type           | Score        | Acc. | Qual. | Alg. | Big-O (t / s) |
++---+-----------------------+--------------+------+-------+------+---------------+
+| 1 | JavaScript, coding    | 100          | 100  | 100   | 100  | O(1) / O(1)   |
+| 2 | React, coding         | 92           | 95   | 95    | 90   | O(1) / O(1)   |
+| 3 | Databases, conceptual | not answered |      |       |      |               |
++---+-----------------------+--------------+------+-------+------+---------------+
+
+    Question 1 asked for a function that combines three asynchronous calls
+with concurrency and fallbacks; question 2 asked for a React hook that avoids
+stale responses. The feedback referred to specific elements of the submitted
+code, and for question 2 it suggested cancelling stale requests with an
+AbortController, a valid improvement. The final report gave Overall 64,
+Technical Knowledge 65, Problem Solving 65, Coding 68, Communication 85 and
+Accuracy 64, and its weaknesses named the unanswered SQL question. The
+arithmetic fallback of (3) would have given 96 for the two answered questions,
+which shows the value of evaluating the whole session. The fallback itself was
+verified on a separate session with one coding answer (s = 98, accuracy 100,
+algorithm 100, communication 80), which produced 98, 100, 100, 98, 80 and 100,
+as (3) predicts.
+
+D. Discussion
+
+    The results show that the workflow, validation, proctoring and fallback
+mechanisms behave as designed with a real model. They do not show that the
+scores are valid: the model's ratings were not compared with human
+interviewers, the same answer may be scored differently in different runs [6],
+and complexity estimates are produced without running the code. The number of
+sessions was also limited by the API quota.
+
 
 V. LIMITATIONS AND FUTURE WORK
 
-Several limitations warrant discussion. First, text-only interaction
-precludes the assessment of spoken fluency, vocal cadence, and body
-language—attributes often valued in client-facing consultancy roles.
-Second, our study cohort (N = 50) was sampled from a single university,
-which may constrain generalizability across broader industrial seniority
-levels. Third, dependency on proprietary cloud LLM APIs introduces rate
-limit constraints and data privacy considerations that require on-premise
-open-weight model deployment.
+    First, score validity is unmeasured. We plan a study in which candidates
+complete sessions that are scored independently by the platform and by two
+faculty interviewers using the same rubric, reporting correlation and
+intraclass correlation together with a candidate experience survey. Second,
+the platform depends on an external API: retries with back-off, clear quota
+messages and a fallback model are needed. Third, candidate answers are
+inserted directly into evaluation prompts, so an answer could contain
+instructions aimed at the evaluator; prompt injection and jailbreaking are
+documented risks for LLM-integrated applications [26], [27], and candidate
+text should be delimited and screened. Fourth, code is not executed; a sandbox
+such as Judge0 with hidden tests should complement the model review. Fifth,
+browser-based proctoring can be bypassed with a second device, and violations
+are counted only in the browser rather than recorded on the server. Finally,
+testing revealed implementation defects that we will correct: duplicate
+generation of the first question when the start request is sent twice in
+development mode, a timer fixed at 45 minutes regardless of the configured
+duration, dashboard statistics not linked to stored results, and
+authentication errors returned as HTTP 500. Further directions include spoken
+interviews, difficulty calibration with item response theory, and resume-based
+question generation.
 
-Future research trajectories include: (1) integrating local speech-to-text
-with Web Audio prosody scoring; (2) calibrating question difficulty
-parameters using Item Response Theory (IRT); (3) exploring multi-agent
-interview panels where specialized LLMs simulate diverse interviewer
-personas; and (4) auditing platform outputs against international
-algorithmic hiring regulations, including New York City Local Law 144 and
-the European Union Artificial Intelligence Act.
 
 VI. CONCLUSION
 
-This paper presented the design, implementation, and empirical evaluation
-of an AI-Powered Technical Interview and Skill Assessment Platform. By
-coupling Google's Gemini LLM with a deterministic conversational state
-machine and Zod schema validation, the system achieves 99.7% output
-reliability and high concordance with human evaluators (r = 0.84,
-ICC = 0.88), while curtailing evaluation time by 82% and candidate
-anxiety by 73%. These results confirm the transformative potential of
-LLMs for fair and scalable talent assessment.
+    We presented an AI-powered technical interview and skill assessment
+platform in which an LLM generates and evaluates questions while the
+application controls progression through a bounded state machine and validates
+every model output against a schema. The platform assesses conceptual and
+coding answers in one proctored session and produces a holistic report with a
+deterministic fallback. A functional evaluation with the live model confirmed
+the intended behaviour in 22 of 25 cases and exposed concrete weaknesses in
+error handling and analytics. Measuring agreement with human interviewers is
+the next step before such scores can be relied upon beyond practice.
+
+
+ACKNOWLEDGMENT
+
+    This work was carried out as minor project CSE_M2_35 under the guidance of
+Dr. Monali Suthar in the Department of Computer Engineering, Silver Oak
+University, Ahmedabad.
+
 
 REFERENCES
 
-[1] P. Cappelli, "The emerging economics of talent management and
-    development," Human Resource Management Review, vol. 31, no. 4,
-    pp. 100767, 2021.
-[2] J. Raghavan, S. Patel, and R. Fernandez, "Engineering interview
-    processes at scale: Practices, costs, and candidate outcomes at top
-    technology firms," in Proc. ACM CHI, pp. 1–14, 2023.
-[3] L. J. Hickman, N. Tay, and L. Saef, "Automated video interview
-    personality assessments: Reliability, validity, and generalizability
-    concerns," Journal of Applied Psychology, vol. 107, no. 12,
-    pp. 2223–2247, 2022.
-[4] M. Raghavan, S. Barocas, J. Kleinberg, and K. Levy, "Mitigating
-    bias in algorithmic hiring: Evaluating claims and practices," in
-    Proc. ACM FAccT, pp. 469–481, 2022.
-[5] D. Hemamou et al., "Multimodal analysis of hiring: A survey of
-    automated interview processing," Information Fusion, vol. 85,
-    pp. 195–215, 2022.
-[6] A. Chowdhery et al., "PaLM: Scaling language modeling with pathways,"
-    Journal of Machine Learning Research, vol. 24, no. 240, pp. 1–113,
-    2023.
-[7] Google DeepMind, "Gemini: A family of highly capable multimodal
-    models," arXiv:2312.11805v2, 2024.
-[8] P. R. Sackett et al., "Revisiting the design of selection systems
-    in light of new findings regarding the validity of common selection
-    procedures," Journal of Applied Psychology, vol. 107, no. 11,
-    pp. 2040–2068, 2022.
-[9] M. Chen et al., "Evaluating large language models trained on code,"
-    arXiv:2107.03374, 2021.
-[10] Y. Li et al., "Competition-level code generation with AlphaCode,"
+[1]  F. L. Schmidt and J. E. Hunter, “The validity and utility of selection
+     methods in personnel psychology: Practical and theoretical implications
+     of 85 years of research findings,” Psychol. Bull., vol. 124, no. 2, pp.
+     262–274, 1998.
+[2]  P. R. Sackett, C. Zhang, C. M. Berry, and F. Lievens, “Revisiting
+     meta-analytic estimates of validity in personnel selection: Addressing
+     systematic overcorrection for restriction of range,” J. Appl. Psychol.,
+     vol. 107, no. 11, pp. 2040–2068, 2022.
+[3]  OpenAI, “GPT-4 technical report,” arXiv:2303.08774, 2023.
+[4]  A. Chowdhery et al., “PaLM: Scaling language modeling with pathways,” J.
+     Mach. Learn. Res., vol. 24, no. 240, pp. 1–113, 2023.
+[5]  Gemini Team, Google, “Gemini: A family of highly capable multimodal
+     models,” arXiv:2312.11805, 2023.
+[6]  L. Zheng et al., “Judging LLM-as-a-judge with MT-Bench and Chatbot
+     Arena,” in Proc. Adv. Neural Inf. Process. Syst. (NeurIPS), Datasets and
+     Benchmarks Track, vol. 36, 2023.
+[7]  Z. Ji et al., “Survey of hallucination in natural language generation,”
+     ACM Comput. Surv., vol. 55, no. 12, pp. 1–38, 2023.
+[8]  M. E. Hoque, M. Courgeon, J.-C. Martin, B. Mutlu, and R. W. Picard,
+     “MACH: My automated conversation coacH,” in Proc. ACM Int. Joint Conf.
+     Pervasive Ubiquitous Comput. (UbiComp), 2013, pp. 697–706.
+[9]  I. Naim, M. I. Tanveer, D. Gildea, and M. E. Hoque, “Automated analysis
+     and prediction of job interview performance,” IEEE Trans. Affect.
+     Comput., vol. 9, no. 2, pp. 191–204, 2018.
+[10] L. Hemamou, G. Felhi, V. Vandenbussche, J.-C. Martin, and C. Clavel,
+     “HireNet: A hierarchical attention model for the automatic analysis of
+     asynchronous video job interviews,” in Proc. AAAI Conf. Artif. Intell.,
+     vol. 33, 2019, pp. 573–581.
+[11] L. Hickman, N. Bosch, V. Ng, R. Saef, L. Tay, and S. E. Woo, “Automated
+     video interview personality assessments: Reliability, validity, and
+     generalizability investigations,” J. Appl. Psychol., vol. 107, no. 8, pp.
+     1323–1351, 2022.
+[12] M. Raghavan, S. Barocas, J. Kleinberg, and K. Levy, “Mitigating bias in
+     algorithmic hiring: Evaluating claims and practices,” in Proc. Conf.
+     Fairness, Accountability, and Transparency (FAT*), 2020, pp. 469–481.
+[13] M. Chen et al., “Evaluating large language models trained on code,”
+     arXiv:2107.03374, 2021.
+[14] Y. Li et al., “Competition-level code generation with AlphaCode,”
      Science, vol. 378, no. 6624, pp. 1092–1097, 2022.
-[11] R. Li et al., "StarCoder: May the source be with you," Transactions
-     on Machine Learning Research, 2023.
-[12] B. Roziere et al., "Code Llama: Open foundation models for code,"
+[15] R. Li et al., “StarCoder: May the source be with you!” Trans. Mach.
+     Learn. Res., 2023.
+[16] B. Rozière et al., “Code Llama: Open foundation models for code,”
      arXiv:2308.12950, 2023.
-[13] D. Guo et al., "UniXcoder: Unified cross-modal pre-training for
-     code representation," in Proc. ACL, pp. 7212–7225, 2022.
-[14] W. Ahmad et al., "Large language models for program analysis:
-     Opportunities and challenges," arXiv:2310.01780, 2023.
-[15] S. Peng et al., "The impact of AI on developer productivity:
-     Evidence from GitHub Copilot," Communications of the ACM, vol. 67,
-     no. 12, pp. 92–100, 2024.
-[16] OpenAI, "GPT-4 Technical Report," arXiv:2303.08774v6, 2024.
-[17] S. Rebuffi, M. Deshpande, and P. Chaudhuri, "NeMo Guardrails:
-     A toolkit for controllable and safe LLM applications," in Proc.
-     EMNLP, pp. 466–480, 2023.
-[18] W. F. Cascio and H. Aguinis, "Applied psychology in talent
-     management: Recent developments, key challenges, and future
-     directions," Annu. Rev. Organ. Psychol., vol. 9, pp. 441–464, 2022.
-[19] J. Klerkx, K. Verbert, and E. Duval, "Learning analytics
-     dashboards: Current state and future directions," in Proc. LAK,
-     pp. 200–208, 2022.
-[20] B. Peng et al., "Check your facts and try again: Improving large
-     language models with automated feedback," arXiv:2302.12813, 2023.
-[21] G. Kurdi et al., "Automatic question generation in education:
-     A systematic review," IEEE TLT, vol. 15, no. 4, pp. 478–494, 2022.
-[22] L. Ouyang et al., "Training language models to follow instructions
-     with human feedback," in NeurIPS, vol. 35, pp. 27730–27744, 2022.
-[23] J. Wei et al., "Chain-of-thought prompting elicits reasoning in
-     large language models," in NeurIPS, vol. 35, pp. 24824–24837, 2022.
-[24] S. Bubeck et al., "Sparks of artificial general intelligence:
-     Early experiments with GPT-4," arXiv:2303.12712, 2023.
-[25] J. Liu et al., "Jailbreaking ChatGPT via prompt engineering:
-     An empirical study," arXiv:2305.13860, 2023.
+[17] D. Guo, S. Lu, N. Duan, Y. Wang, M. Zhou, and J. Yin, “UniXcoder: Unified
+     cross-modal pre-training for code representation,” in Proc. 60th Annu.
+     Meeting Assoc. Comput. Linguistics (ACL), 2022, pp. 7212–7225.
+[18] L. Ouyang et al., “Training language models to follow instructions with
+     human feedback,” in Proc. Adv. Neural Inf. Process. Syst. (NeurIPS), vol.
+     35, 2022, pp. 27730–27744.
+[19] J. Wei et al., “Chain-of-thought prompting elicits reasoning in large
+     language models,” in Proc. Adv. Neural Inf. Process. Syst. (NeurIPS),
+     vol. 35, 2022, pp. 24824–24837.
+[20] T. Rebedea, R. Dinu, M. N. Sreedhar, C. Parisien, and J. Cohen, “NeMo
+     Guardrails: A toolkit for controllable and safe LLM applications with
+     programmable rails,” in Proc. Conf. Empirical Methods Natural Lang.
+     Process.: Syst. Demonstrations (EMNLP), 2023.
+[21] B. Peng et al., “Check your facts and try again: Improving large language
+     models with external knowledge and automated feedback,” arXiv:2302.12813,
+     2023.
+[22] E. Kasneci et al., “ChatGPT for good? On opportunities and challenges of
+     large language models for education,” Learn. Individ. Differ., vol. 103,
+     Art. no. 102274, 2023.
+[23] G. Kurdi, J. Leo, B. Parsia, U. Sattler, and S. Al-Emari, “A systematic
+     review of automatic question generation for educational purposes,” Int.
+     J. Artif. Intell. Educ., vol. 30, pp. 121–204, 2020.
+[24] N. Provos and D. Mazières, “A future-adaptable password scheme,” in Proc.
+     USENIX Annu. Tech. Conf., FREENIX Track, 1999.
+[25] M. Jones, J. Bradley, and N. Sakimura, “JSON Web Token (JWT),” IETF RFC
+     7519, May 2015.
+[26] Y. Liu et al., “Jailbreaking ChatGPT via prompt engineering: An empirical
+     study,” arXiv:2305.13860, 2023.
+[27] K. Greshake, S. Abdelnabi, S. Mishra, C. Endres, T. Holz, and M. Fritz,
+     “Not what you’ve signed up for: Compromising real-world LLM-integrated
+     applications with indirect prompt injection,” in Proc. 16th ACM Workshop
+     Artif. Intell. Security (AISec), 2023, pp. 79–90.
 
-================================================================================
+==============================================================================
 END OF PAPER
-================================================================================
+==============================================================================
